@@ -314,11 +314,16 @@ def _predictor():
 
 
 def model_available() -> bool:
+    return model_error() is None
+
+
+def model_error() -> str | None:
+    """None when the MRZ reader loads, otherwise a human-readable reason."""
     try:
         _predictor()
-        return True
-    except Exception:
-        return False
+        return None
+    except Exception as e:
+        return str(e)
 
 
 def recognise(line_imgs: list[np.ndarray]) -> list[np.ndarray]:

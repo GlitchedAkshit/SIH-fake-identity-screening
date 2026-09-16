@@ -5,7 +5,10 @@ import pytest
 
 from src import face_verification as fv
 
-SAMPLE = Path(__import__('matplotlib').get_data_path()) / 'sample_data' / 'grace_hopper.jpg'
+try:
+    SAMPLE = Path(__import__('matplotlib').get_data_path()) / 'sample_data' / 'grace_hopper.jpg'
+except ImportError:
+    SAMPLE = Path('missing-matplotlib-sample.jpg')
 
 pytestmark = pytest.mark.skipif(not (fv.models_available() and SAMPLE.exists()), reason='face models or sample photo missing')
 

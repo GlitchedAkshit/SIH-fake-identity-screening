@@ -36,9 +36,12 @@ def capture_features(img: np.ndarray, quad: np.ndarray | None) -> dict:
 
 @lru_cache(maxsize=1)
 def _bundle():
-    import joblib
     p = MODEL_DIR / 'capture_advisor.joblib'
-    return joblib.load(p) if p.exists() else None
+    try:
+        import joblib
+        return joblib.load(p) if p.exists() else None
+    except ImportError:
+        return None
 
 
 MIN_AUC = 0.75  # below this the advisor would misdirect officers more than it helps

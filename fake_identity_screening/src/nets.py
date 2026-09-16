@@ -4,9 +4,24 @@ All models are fully convolutional. Runtime loads ``models/<name>.onnx`` through
 when present (no PyTorch needed), otherwise ``models/<name>.pt`` through PyTorch."""
 from __future__ import annotations
 
-import torch
-from torch import nn
-import torch.nn.functional as F
+try:
+    import torch
+    from torch import nn
+    import torch.nn.functional as F
+except ImportError:  # runtime can still use ONNX models through OpenCV
+    torch = None
+
+    class _Missing:
+        Module = object
+
+        def __getattr__(self, name):
+            raise ImportError(TORCH_HINT)
+
+    nn = _Missing()
+    F = _Missing()
+
+TORCH_HINT = ('PyTorch is not installed in this Python environment, so the trained networks cannot run. '
+              'Install it with "pip install torch" (or the CUDA build for a GPU), or export the models to ONNX.')
 
 
 def cbr(cin, cout, k=3, s=1, p=None, d=1):
@@ -135,6 +150,8 @@ class Predictor:
             self.net = cv2.dnn.readNetFromONNX(str(onnx_path))
             self.backend = 'opencv-onnx'
         elif pt_path.exists():
+            if torch is None:
+                raise ImportError(TORCH_HINT)
             self.torch = torch
             self.device = torch.device('cuda' if torch.cuda.is_available() and prefer != 'cpu' else 'cpu')
             self.model = _FACTORIES[name]()

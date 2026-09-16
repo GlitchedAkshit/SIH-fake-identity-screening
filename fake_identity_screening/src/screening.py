@@ -119,7 +119,9 @@ class ScreeningService:
         self.audit = audit or AuditLog()
 
     def status(self) -> dict:
-        return dict(mrz_reader=mrz_model_available(), tamper_model=pixel_model_available(), face_models=fv.models_available(),
+        from .mrz_reader import model_error
+        return dict(mrz_reader=mrz_model_available(), mrz_reader_error=model_error(), tamper_model=pixel_model_available(),
+                    face_models=fv.models_available(),
                     policy_version=self.policy.get('policy_version'), registry=self.registry.stats(),
                     audit=self.audit.verify())
 

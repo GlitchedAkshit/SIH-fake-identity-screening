@@ -6,9 +6,11 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import logging
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from src.registry import LIST_TYPES
@@ -28,10 +30,15 @@ def _screen_locked(*args, **kwargs):
         return service.screen(*args, **kwargs)
 
 
+log = logging.getLogger('screening')
+
+
 def _warm_up():
     # Load neural networks before the first traveller is screened.
     from src import face_verification, mrz_reader, tampering
-    mrz_reader.model_available()
+    err = mrz_reader.model_error()
+    if err:
+        log.error('MRZ reader unavailable, screening requests will be refused: %s', err)
     tampering.pixel_model_available()
     if face_verification.models_available():
         face_verification._detector(); face_verification._recognizer()
@@ -45,6 +52,19 @@ async def lifespan(_app):
 
 app = FastAPI(title='AI Fake Identity & Document Screening System', version='2.0.0', lifespan=lifespan,
               description='SIH 26188 - OCR, document validation, tampering detection, face verification and risk scoring.')
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception):
+    log.exception('Unhandled error on %s', request.url.path)
+    return JSONResponse(status_code=500, content=dict(detail=f'Internal error: {type(exc).__name__}: {exc}'))
+
+
+def _require_models():
+    from src.mrz_reader import model_error
+    err = model_error()
+    if err:
+        raise HTTPException(503, f'Screening unavailable: {err}')
 
 
 async def _read_image(upload: UploadFile | None, name: str) -> bytes | None:
@@ -78,6 +98,7 @@ async def screen(document: UploadFile = File(..., description='Passport, visa, I
                  checkpoint_id: str | None = Form(None), officer_id: str | None = Form(None),
                  entry_date: date | None = Form(None), intended_stay_days: int | None = Form(None),
                  include_images: bool = Form(False)):
+    _require_models()
     doc = await _read_image(document, 'document')
     live = await _read_image(live_photo, 'live_photo')
     comp = await _read_image(companion, 'companion')
@@ -93,6 +114,7 @@ async def screen(document: UploadFile = File(..., description='Passport, visa, I
 @app.post('/screen', include_in_schema=False)
 async def screen_legacy(file: UploadFile = File(...)):
     """Backwards-compatible single-image endpoint from the original build."""
+    _require_models()
     data = await _read_image(file, 'file')
     try:
         return await run_in_threadpool(_screen_locked, data)

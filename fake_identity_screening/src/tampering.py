@@ -64,9 +64,12 @@ def heatmap_features(prob: np.ndarray) -> dict:
 
 @lru_cache(maxsize=1)
 def _aggregator():
-    import joblib
     path = MODEL_DIR / 'tamper_aggregator.joblib'
-    return joblib.load(path) if path.exists() else None
+    try:
+        import joblib
+        return joblib.load(path) if path.exists() else None
+    except ImportError:  # scikit-learn/joblib missing: fall back to the calibrated hottest-region score
+        return None
 
 
 def document_forgery_score(prob: np.ndarray) -> tuple[float, float]:
